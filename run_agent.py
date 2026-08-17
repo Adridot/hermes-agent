@@ -1317,6 +1317,12 @@ class AIAgent(
         """
         tool_calls = assistant_message.tool_calls
         args = (assistant_message, messages, effective_task_id, api_call_count)
+        # One assistant message = one guardrail batch: all its calls are emitted before any result exists,
+        # so several failures in it are one observation, not several retries. Advisory bookkeeping, hence
+        # getattr: it must never abort dispatch for an agent without a controller (test stubs).
+        guardrails = getattr(self, "_tool_guardrails", None)
+        if guardrails is not None:
+            guardrails.begin_tool_batch()
         self._executing_tools = True  # allow _vprint during tool execution even with stream consumers
         try:
             if len(tool_calls) <= 1:

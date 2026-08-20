@@ -412,3 +412,28 @@ def test_a_real_tool_error_is_still_a_failure():
     assert _detect_tool_failure("read_file", real)[0] is True
     # The marker is only honoured as the literal boolean, never as truthy prose.
     assert classify_tool_failure("read_file", '{"error": "x", "guardrail_refusal": "yes"}')[0] is True
+
+
+def test_memory_terminal_degradation_is_not_a_tool_failure():
+    # The memory tool's terminal graceful-degradation result (#42405) carries
+    # done=True and already tells the model to stop retrying. Counting it as a
+    # failure feeds the same-tool halt counter, which aborts the turn and eats
+    # the user-facing reply - the exact outcome #42405 exists to prevent.
+    # Keep in lockstep with agent/display.py:_detect_tool_failure.
+    terminal = json.dumps({
+        "success": False,
+        "done": True,
+        "error": (
+            "Memory consolidation failed 4 times this turn. Stop retrying "
+            "memory calls - leave memory unchanged for now and continue with "
+            "your reply to the user."
+        ),
+    })
+    full = json.dumps({
+        "success": False,
+        "error": "Memory at 3,990/4,000 chars. Adding this entry would exceed the limit.",
+    })
+
+    assert classify_tool_failure("memory", terminal) == (False, "")
+    # A genuine at-capacity error is still a failure.
+    assert classify_tool_failure("memory", full) == (True, " [full]")

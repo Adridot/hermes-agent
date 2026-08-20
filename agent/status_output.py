@@ -191,9 +191,9 @@ class StatusOutputMixin:
             buf.clear()
 
     def _emit_pending_fallback_notice(self) -> None:
-        """Surface the one-shot fallback-switch notice on successful recovery: a provider switch is durable
-        state operators must see, unlike the retry chatter ``_clear_status_buffer`` drops. Emitted once, then
-        cleared; on terminal failure the buffered switch line is flushed instead (``_flush_status_buffer``)."""
+        """Surface the one-shot notice of a provider switch made BEFORE the agent existed (gateway / TUI
+        credential resolution, which has no agent to emit through at the switch). Emitted once, then
+        cleared. In-loop switches never pass through here: ``try_activate_fallback`` emits them at the switch."""
         notice = getattr(self, "_pending_fallback_notice", None)
         if not notice:
             return
@@ -208,7 +208,7 @@ class StatusOutputMixin:
 
     def _flush_status_buffer(self) -> None:
         """Emit buffered retry messages — call on terminal failure so the user sees what was tried."""
-        # The buffered trace already carries the switch line; drop the one-shot notice.
+        # Drop the pre-agent one-shot notice so it cannot leak into a later successful turn.
         self._pending_fallback_notice = None
         buf = getattr(self, "_retry_status_buffer", None)
         if not buf:

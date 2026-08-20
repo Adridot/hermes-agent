@@ -478,3 +478,28 @@ def test_execute_code_replay_streak_notice_fires_on_warn_only_desktop_config():
     assert notices[:2] == [None, None]
     assert all(n is not None and "consecutive identical call to execute_code" in n for n in notices[2:]), notices
     assert controller.halt_decision is None, "warn-only surfaces must not halt"
+
+
+def test_memory_terminal_degradation_is_not_a_tool_failure():
+    # The memory tool's terminal graceful-degradation result (#42405) carries
+    # done=True and already tells the model to stop retrying. Counting it as a
+    # failure feeds the same-tool halt counter, which aborts the turn and eats
+    # the user-facing reply - the exact outcome #42405 exists to prevent.
+    # Keep in lockstep with agent/display.py:_detect_tool_failure.
+    terminal = json.dumps({
+        "success": False,
+        "done": True,
+        "error": (
+            "Memory consolidation failed 4 times this turn. Stop retrying "
+            "memory calls - leave memory unchanged for now and continue with "
+            "your reply to the user."
+        ),
+    })
+    full = json.dumps({
+        "success": False,
+        "error": "Memory at 3,990/4,000 chars. Adding this entry would exceed the limit.",
+    })
+
+    assert classify_tool_failure("memory", terminal) == (False, "")
+    # A genuine at-capacity error is still a failure.
+    assert classify_tool_failure("memory", full) == (True, " [full]")

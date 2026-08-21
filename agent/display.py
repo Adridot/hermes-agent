@@ -17,7 +17,11 @@ from urllib.parse import urlsplit
 
 from utils import safe_json_loads
 from agent.redact import redact_sensitive_text
-from agent.tool_result_classification import file_mutation_result_landed, is_guardrail_refusal
+from agent.tool_result_classification import (
+    classify_memory_result,
+    file_mutation_result_landed,
+    is_guardrail_refusal,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -936,18 +940,13 @@ def _detect_tool_failure(tool_name: str, result: Any) -> tuple[bool, str]:
         err_msg = data.get("error")
         return True, f" [{_trim_error(str(err_msg))}]" if err_msg else f" [exit {exit_code}]"
 
+    # Memory: settled payloads and "store full" are decided by the shared classifier;
+    # anything it does not decide falls through to the generic rules below, as before.
+    if tool_name == "memory" and (verdict := classify_memory_result(data)) is not None:
+        return verdict
+
     if isinstance(data, dict):
-        # Memory: done=True is the tool's terminal graceful-degradation result (#42405): it
-        # already tells the model to stop retrying. This is the ``failed`` the executor hands
-        # the loop guardrail, so rendering it as a failure also feeds the same-tool halt
-        # counter, which aborts the turn and eats the user's reply - the exact outcome #42405
-        # exists to prevent. Keep in lockstep with agent/tool_guardrails.py:classify_tool_failure.
-        if tool_name == "memory" and data.get("done") is True:
-            return False, ""
         failed = data.get("success") is False
-        # Memory: distinguish "store full" from real errors.
-        if tool_name == "memory" and failed and "exceed the limit" in data.get("error", ""):
-            return True, " [full]"
         err = data.get("error") or data.get("message")
         if err and (failed or "error" in data):
             return True, f" [{_trim_error(str(err))}]"

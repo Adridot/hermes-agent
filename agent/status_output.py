@@ -207,7 +207,8 @@ class StatusOutputMixin:
                 continue
 
     def _flush_status_buffer(self) -> None:
-        """Emit buffered retry messages — call on terminal failure so the user sees what was tried."""
+        """Emit buffered retry messages — call on terminal failure so the user sees what was tried —
+        and close the trace by naming the model the turn actually died on."""
         # Drop the pre-agent one-shot notice so it cannot leak into a later successful turn.
         self._pending_fallback_notice = None
         buf = getattr(self, "_retry_status_buffer", None)
@@ -226,3 +227,9 @@ class StatusOutputMixin:
                         self._vprint(f"{self.log_prefix}{msg}", force=True)
             except Exception:
                 pass
+        # Switch lines are emitted live at the switch, not buffered, so without this the flushed trace —
+        # the only post-mortem a client reconnecting after the failure gets — would never name the
+        # model the turn ended on.
+        model, provider = getattr(self, "model", None), getattr(self, "provider", None)
+        if model:
+            self._emit_diagnostic_status(f"⏹ Ended on {model}" + (f" via {provider}" if provider else ""))

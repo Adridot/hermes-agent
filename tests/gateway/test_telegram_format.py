@@ -409,6 +409,22 @@ class TestFormatMessageBlockquote:
         assert result == "**> avant || secret || apres||"
         assert "\\|" not in result
 
+    @pytest.mark.parametrize("text, expected", [
+        # bold right after the opener: '**' used to pair with the opener's own
+        ("**> **Plan** 1. **Step** - go||", "**> *Plan* 1\\. *Step* \\- go||"),
+        ("**>**Plan** then||", "**> *Plan* then||"),
+        ("**> **Title**\n> body||", "**> *Title*\n> body||"),
+        # italic: its '*' used to pair with the opener's second one
+        ("**> note *important* here||", "**> note _important_ here||"),
+    ])
+    def test_emphasis_inside_a_quote_does_not_eat_the_opener(self, adapter, text, expected):
+        """The inline steps run before the quotation step and must leave '**>' alone."""
+        assert adapter.format_message(text) == expected
+
+    def test_bold_text_starting_with_gt_is_still_bold(self, adapter):
+        """An odd number of '**' after a leading '**>' means it opens a bold run, not a quotation."""
+        assert adapter.format_message("**>90%** sure") == "*\\>90%* sure"
+
 
 # =========================================================================
 # format_message - mixed/complex

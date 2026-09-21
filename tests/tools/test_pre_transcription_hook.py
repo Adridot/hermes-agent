@@ -4,7 +4,7 @@
 Covers:
 
 1. Fixture plugin returning a prompt → the backend call receives
-   ``initial_prompt`` (faster-whisper) / ``prompt`` (OpenAI, Groq, Mistral).
+   ``initial_prompt`` (faster-whisper) / ``prompt`` (OpenAI, Groq); Mistral drops it.
    The API boundary is stubbed — no live model is loaded or called.
 2. Two hooks → last-writer-wins per field, in registration order.
 3. Hook returning the read-only ``file_path`` field → dropped with a log.
